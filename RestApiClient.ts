@@ -40,15 +40,52 @@ export type UrlFunction = string | ((arg: any) => string)
 export type HeadersFunction = Headers.Headers | ((arg: any) => Effect.Effect<Headers.Headers, any, any>) | undefined
 
 /**
+ * Represents a static request body with a schema and its corresponding data.
+ * The `data` property is type-checked against the schema type to ensure type safety.
+ *
+ * @template T - The schema type that validates the data
+ *
+ * @example
+ * ```ts
+ * body: { schema: Todo, data: { id: "123", title: "Todo", description: "Description", completed: false } }
+ * ```
+ */
+export type StaticBody<T extends Schema.Schema<any> = Schema.Schema<any>> = { schema: T; data: Schema.Schema.Type<T> }
+
+/**
+ * Creates a type-safe static body with schema and data.
+ * Ensures the data matches the schema type at compile time.
+ *
+ * @template T - The schema type
+ * @param schema - The schema to validate the data
+ * @param data - The data that must match the schema type
+ * @returns A StaticBody instance with type-safe schema and data
+ *
+ * @example
+ * ```ts
+ * body(Todo, { id: "123", title: "Todo", description: "Description", completed: false })
+ * ```
+ */
+export const body = <T extends Schema.Schema<any>>(schema: T, data: Schema.Schema.Type<T>): StaticBody<T> => ({
+	schema,
+	data,
+})
+
+/**
  * Represents request body handling that can be:
+ * - A `StaticBody` with schema and data for type-safe static bodies
  * - A `Schema.Schema` for automatic JSON encoding and validation
  * - A function that takes a record parameter and returns an `Effect` that produces `HttpBody.HttpBody`
  *
+ * When a StaticBody is provided, the data is encoded as JSON using the schema.
  * When a Schema is provided, the body will be automatically encoded as JSON in the request.
  * When a function is provided, it allows for custom body encoding (e.g., form data, binary, etc.).
  *
  * @example
  * ```ts
+ * // StaticBody for type-safe static data
+ * body: { schema: Todo, data: { id: "123", title: "Todo", description: "Description", completed: false } }
+ *
  * // Schema for automatic JSON encoding
  * body: NewTodo
  *
@@ -61,7 +98,7 @@ export type HeadersFunction = Headers.Headers | ((arg: any) => Effect.Effect<Hea
  *   })
  * ```
  */
-export type InputFunction = Schema.Schema<any> | ((arg: any) => Effect.Effect<HttpBody.HttpBody, any, any>)
+export type InputFunction = StaticBody | Schema.Schema<any> | ((arg: any) => Effect.Effect<HttpBody.HttpBody, any, any>)
 
 /**
  * Represents response handling that can be:
@@ -363,6 +400,8 @@ export function make<
 
 	const getBody = (params: MakerParams<U, H, I>) =>
 		Effect.gen(function* () {
+			if (spec.body && "data" in spec.body) return yield* parseBody(spec.body.schema, spec.body.data)
+
 			if (!spec.body || !params || !("body" in params)) return undefined
 
 			if (Schema.isSchema(spec.body)) return yield* parseBody(spec.body, params.body)
@@ -549,10 +588,10 @@ export const get = <
  * ```ts
  * import { RestApiClient } from "."
  *
- * // POST with body schema (encoded as JSON)
+ * // POST with static body (encoded as JSON)
  * const createTodo = RestApiClient.post({
  *   url: "/todos",
- *   body: NewTodo, // Schema will be automatically encoded as JSON
+ *   body: { schema: NewTodo, data: { title: "New Todo", description: "Description" } },
  *   response: Todo
  * })
  *
@@ -566,12 +605,12 @@ export const get = <
  * ```ts
  * import { RestApiClient } from "."
  *
- * // POST with dynamic URL, headers, and body schema (encoded as JSON)
+ * // POST with dynamic URL, headers, and static body (encoded as JSON)
  * const createTodoWithHeaders = RestApiClient.post({
  *   url: (params: { userId: string }) => `/users/${params.userId}/todos`,
  *   headers: (params: { contentType: string }) =>
  *     Effect.succeed(Headers.fromInput({ "Content-Type": params.contentType })),
- *   body: NewTodo, // Schema will be automatically encoded as JSON
+ *   body: { schema: NewTodo, data: { title: "New Todo", description: "Description" } },
  *   response: Todo
  * })
  *
@@ -589,17 +628,17 @@ export const get = <
  * ```ts
  * import { RestApiClient } from "."
  *
- * // POST with error handling and body schema (encoded as JSON)
+ * // POST with error handling and static body (encoded as JSON)
  * const createTodo = RestApiClient.post({
  *   url: "/todos",
- *   body: NewTodo, // Schema will be automatically encoded as JSON
+ *   body: { schema: NewTodo, data: { title: "New Todo", description: "Description" } },
  *   response: Todo,
  *   error: ApiError
  * })
  *
  * // If the request fails with a non-OK status, the error schema will parse the response
  * const program = Effect.gen(function* () {
- *   const todo = yield* createTodo({ body: { title: "New Todo", description: "Description" } })
+ *   const todo = yield* createTodo()
  *   return todo
  * })
  * ```
@@ -634,18 +673,15 @@ export const post = <
  * ```ts
  * import { RestApiClient } from "."
  *
- * // PUT with dynamic URL and body schema (encoded as JSON)
+ * // PUT with dynamic URL and static body (encoded as JSON)
  * const updateTodo = RestApiClient.put({
  *   url: (params: { id: string }) => `/todos/${params.id}`,
- *   body: Todo, // Schema will be automatically encoded as JSON
+ *   body: { schema: Todo, data: { id: "123", title: "Updated", description: "Updated", completed: true } },
  *   response: Todo
  * })
  *
  * const program = Effect.gen(function* () {
- *   const updatedTodo = yield* updateTodo({
- *     url: { id: "123" },
- *     body: { id: "123", title: "Updated", description: "Updated", completed: true }
- *   })
+ *   const updatedTodo = yield* updateTodo({ url: { id: "123" } })
  *   return updatedTodo
  * })
  * ```
@@ -654,20 +690,17 @@ export const post = <
  * ```ts
  * import { RestApiClient } from "."
  *
- * // PUT with error handling and body schema (encoded as JSON)
+ * // PUT with error handling and static body (encoded as JSON)
  * const updateTodo = RestApiClient.put({
  *   url: (params: { id: string }) => `/todos/${params.id}`,
- *   body: Todo, // Schema will be automatically encoded as JSON
+ *   body: { schema: Todo, data: { id: "123", title: "Updated", description: "Updated", completed: true } },
  *   response: Todo,
  *   error: ApiError
  * })
  *
  * // If the request fails with a non-OK status, the error schema will parse the response
  * const program = Effect.gen(function* () {
- *   const updatedTodo = yield* updateTodo({
- *     url: { id: "123" },
- *     body: { id: "123", title: "Updated", description: "Updated", completed: true }
- *   })
+ *   const updatedTodo = yield* updateTodo({ url: { id: "123" } })
  *   return updatedTodo
  * })
  * ```
@@ -1004,15 +1037,15 @@ export class Client<
 	 *   error: ApiError,
 	 * })
 	 *
-	 * // Inherits the default error handler from the client, body schema encoded as JSON
+	 * // Inherits the default error handler from the client, static body encoded as JSON
 	 * const createTodo = apiClient.post({
 	 *   url: "/todos",
-	 *   body: NewTodo, // Schema will be automatically encoded as JSON
+	 *   body: { schema: NewTodo, data: { title: "New Todo", description: "Description" } },
 	 *   response: Todo,
 	 * })
 	 *
 	 * const program = Effect.gen(function* () {
-	 *   const todo = yield* createTodo({ body: { title: "New Todo", description: "Description" } })
+	 *   const todo = yield* createTodo()
 	 *   return todo
 	 * })
 	 * ```
@@ -1027,17 +1060,16 @@ export class Client<
 	 *     Effect.succeed(Headers.fromInput({ "Content-Type": params.contentType })),
 	 * })
 	 *
-	 * // Inherits default dynamic headers from the client, body schema encoded as JSON
+	 * // Inherits default dynamic headers from the client, static body encoded as JSON
 	 * const createTodo = apiClient.post({
 	 *   url: "/todos",
-	 *   body: NewTodo, // Schema will be automatically encoded as JSON
+	 *   body: { schema: NewTodo, data: { title: "New Todo", description: "Description" } },
 	 *   response: Todo,
 	 * })
 	 *
 	 * const program = Effect.gen(function* () {
 	 *   const todo = yield* createTodo({
 	 *     headers: { contentType: "application/json" },
-	 *     body: { title: "New Todo", description: "Description" },
 	 *   })
 	 *   return todo
 	 * })
@@ -1046,7 +1078,7 @@ export class Client<
 	post = <
 		U extends UrlFunction,
 		H extends HeadersFunction = DefaultHeaders,
-		I extends Schema.Schema<any> = never,
+		I extends InputFunction = never,
 		O extends OutputFunction = never,
 		E extends ErrorFunction = DefaultError
 	>(
@@ -1087,18 +1119,15 @@ export class Client<
 	 *   error: ApiError,
 	 * })
 	 *
-	 * // Inherits the default error handler from the client, body schema encoded as JSON
+	 * // Inherits the default error handler from the client, static body encoded as JSON
 	 * const updateTodo = apiClient.put({
 	 *   url: (params: { id: string }) => `/todos/${params.id}`,
-	 *   body: Todo, // Schema will be automatically encoded as JSON
+	 *   body: { schema: Todo, data: { id: "123", title: "Updated", description: "Updated", completed: true } },
 	 *   response: Todo,
 	 * })
 	 *
 	 * const program = Effect.gen(function* () {
-	 *   const updatedTodo = yield* updateTodo({
-	 *     url: { id: "123" },
-	 *     body: { id: "123", title: "Updated", description: "Updated", completed: true },
-	 *   })
+	 *   const updatedTodo = yield* updateTodo({ url: { id: "123" } })
 	 *   return updatedTodo
 	 * })
 	 * ```
@@ -1111,10 +1140,10 @@ export class Client<
 	 *   headers: Headers.fromInput({ "X-API-Version": "v2" }),
 	 * })
 	 *
-	 * // Inherits default headers from the client, body schema encoded as JSON
+	 * // Inherits default headers from the client, static body encoded as JSON
 	 * const updateTodo = apiClient.put({
 	 *   url: (params: { id: string }) => `/todos/${params.id}`,
-	 *   body: Todo, // Schema will be automatically encoded as JSON
+	 *   body: { schema: Todo, data: { id: "123", title: "Updated", description: "Updated", completed: true } },
 	 *   response: Todo,
 	 * })
 	 * ```
@@ -1122,7 +1151,7 @@ export class Client<
 	put = <
 		U extends UrlFunction,
 		H extends HeadersFunction = DefaultHeaders,
-		I extends Schema.Schema<any> = never,
+		I extends InputFunction = never,
 		O extends OutputFunction = never,
 		E extends ErrorFunction = DefaultError
 	>(
@@ -1199,7 +1228,7 @@ export class Client<
 	del = <
 		U extends UrlFunction,
 		H extends HeadersFunction = DefaultHeaders,
-		I extends Schema.Schema<any> = never,
+		I extends InputFunction = never,
 		O extends OutputFunction = never,
 		E extends ErrorFunction = DefaultError
 	>(

@@ -5,7 +5,7 @@ import { RestApiClient } from "."
 // simply describe the api endpoints and their responses (declaratively)
 // get back a type-safe function to create the request and send it
 
-class Todo extends Schema.TaggedClass<Todo>("@app/schemas/Todo")("Todo", {
+export class Todo extends Schema.TaggedClass<Todo>("@app/schemas/Todo")("Todo", {
 	id: Schema.UUID,
 	title: Schema.String,
 	description: Schema.String,
@@ -346,6 +346,23 @@ const getPublicData = apiClient.get({
 			statusText: String(res.status),
 			message: `Public endpoint failed: ${res.status}`,
 		}),
+})
+
+const initialTodo = new Todo({
+	id: "example-id",
+	title: "Example Todo",
+	description: "Example Description",
+	completed: false,
+})
+
+const updateTodoStatic = Effect.gen(function* () {
+	const updatedTodo = yield* apiClient.put({
+		url: `/todos/${initialTodo.id}`,
+		body: RestApiClient.body(Todo, initialTodo),
+		response: Todo,
+	})()
+
+	return updatedTodo
 })
 
 // Example 6: Complete example with Client and Layer
