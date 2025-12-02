@@ -1,5 +1,7 @@
 {
-	"editor.codeActionsOnSave": { "source.organizeImports": "explicit" },
+	"editor.codeActionsOnSave": {
+		"source.organizeImports": "explicit"
+	},
 	"typescript.tsdk": "node_modules/typescript/lib",
 	"editor.defaultFormatter": "esbenp.prettier-vscode",
 	"editor.formatOnPaste": true,
