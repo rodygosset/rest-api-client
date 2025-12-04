@@ -1,4 +1,3 @@
-import { FetchHttpClient } from "@effect/platform"
 import { Config, Console, Effect, Layer, Schema } from "effect"
 import { Client } from "../src"
 import { Todo } from "./common"
