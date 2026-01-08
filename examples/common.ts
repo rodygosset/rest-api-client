@@ -8,6 +8,7 @@ export class Todo extends Schema.Class<Todo>("@app/schemas/Todo")({
 }) {}
 
 export const NewTodo = Todo.pipe(Schema.omit("id", "completed"))
+export type NewTodo = typeof NewTodo.Type
 
 export class ApiError extends Schema.TaggedError<ApiError>()("@app/errors/ApiError", {
 	method: Schema.String,
@@ -16,4 +17,3 @@ export class ApiError extends Schema.TaggedError<ApiError>()("@app/errors/ApiErr
 	statusText: Schema.String,
 	message: Schema.String.pipe(Schema.optional),
 }) {}
-

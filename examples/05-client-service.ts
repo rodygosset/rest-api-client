@@ -49,13 +49,6 @@ export class TodoRepo extends Effect.Service<TodoRepo>()("@app/TodoRepo", {
 		// Yield client dependency from the service context
 		const client = yield* ApiClient
 
-		class GetTodos extends client.Request.Get("app/GetTodos", {
-			url: "/todos",
-			response: Todo.pipe(Schema.Array),
-		}) {}
-
-		const effect = Effect.request(new GetTodos(), GetTodos.resolver)
-
 		// Build route functions using the injected client
 		const getTodos = client.get({ url: "/todos", response: Todo.pipe(Schema.Array) })
 
